@@ -67,14 +67,32 @@ private[rdd] class MarkDuplicates extends Serializable with Logging {
     // Group the paired reads
     val pairGroups = rdd.map(record => (createPositionTuple(record), record)).groupByKey()
 
-    val unclippedPositions = pairGroups.map {
+    val unclippedPositions: RDD[ADAMRecord] = pairGroups.flatMap {
       p =>
-        // This groupBy will sort out any position tuple collisions
+      // This groupBy will sort out any position tuple collisions
         val groupedReads = p._2.groupBy(record => (record.getRecordGroupId + ":" + record.getReadName).reverse)
-
+        // Walk the grouped reads and emit the unclipped positions
+        val foo = groupedReads.flatMap {
+          p =>
+            val key: String = p._1
+            val reads: Seq[ADAMRecord] = p._2
+            reads.size match {
+              case 1 =>
+                val read1: ADAMRecord = reads(0)
+                Seq(read1)
+              case 2 =>
+                /*
+                val read1 = reads.find(_.getFirstOfPair)
+                val read2 = reads.find(_.getSecondOfPair)*/
+                Seq(reads(0), reads(1))
+              case _ =>
+                throw new IllegalStateException("Found unexpected number '%d' of reads for pair groupBy '%s'".format(reads.size, key.reverse))
+            }
+        }
+        foo
     }
 
-    rdd
+    unclippedPositions
   }
 
 }
