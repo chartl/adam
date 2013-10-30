@@ -107,8 +107,9 @@ class BamConverter extends Serializable {
       .setReferenceId(samRecord.getMateReferenceIndex)
       .setReadName(samRecord.getReadName)
       .setSequence(samRecord.getReadString)
-      .setQual(samRecord.getBaseQualityString)
       .setCigar(samRecord.getCigarString)
+      // NOTE: We don't use the samRecord.getBaseQualityString because of a SAMtools bug
+      .setQual(samRecord.getBaseQualities.map(p => (p.toChar + 33).toChar))
 
     val start: Int = samRecord.getAlignmentStart
 
