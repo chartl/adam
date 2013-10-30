@@ -20,7 +20,7 @@ import org.scalatest.FunSuite
 
 class MarkDuplicatesSuite extends FunSuite {
 
-    test("UniqueReadPairKey") {
+    test("") {
     }
 
 }

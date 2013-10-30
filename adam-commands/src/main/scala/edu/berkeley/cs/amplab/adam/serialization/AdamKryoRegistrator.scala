@@ -22,6 +22,7 @@ import org.apache.avro.io.{BinaryDecoder, DecoderFactory, BinaryEncoder, Encoder
 import spark.KryoRegistrator
 import edu.berkeley.cs.amplab.adam.avro.{ADAMGenotype, ADAMPileup, ADAMRecord}
 import edu.berkeley.cs.amplab.adam.models.{MatedReferencePositionSerializer, MatedReferencePosition, ReferencePositionSerializer, ReferencePosition}
+import edu.berkeley.cs.amplab.adam.rdd.{ReadPairPositions, ReadPairPositionsSerializer}
 
 class AvroSerializer[T <: SpecificRecord : ClassManifest] extends Serializer[T] {
   val reader = new SpecificDatumReader[T](classManifest[T].erasure.asInstanceOf[Class[T]])
@@ -49,5 +50,6 @@ class AdamKryoRegistrator extends KryoRegistrator {
     kryo.register(classOf[ADAMGenotype], new AvroSerializer[ADAMGenotype]())
     kryo.register(classOf[ReferencePosition], new ReferencePositionSerializer)
     kryo.register(classOf[MatedReferencePosition], new MatedReferencePositionSerializer)
+    kryo.register(classOf[ReadPairPositions], new ReadPairPositionsSerializer)
   }
 }
