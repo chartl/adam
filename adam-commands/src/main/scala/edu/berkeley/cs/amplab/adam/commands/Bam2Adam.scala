@@ -53,13 +53,13 @@ class Bam2Adam(protected val args: Bam2AdamArgs) extends AdamSparkCommand[Bam2Ad
 
   def run(sc: SparkContext, job: Job) {
     var adamRecords: RDD[ADAMRecord] = sc.adamLoad(args.bamFile)
-    if (args.sortReads) {
-      log.info("Sorting reads")
-      adamRecords = adamRecords.adamSortReadsByReferencePosition()
-    }
     if (args.markDuplicates) {
       log.info("Marking duplicates")
       adamRecords = adamRecords.adamMarkDuplicates()
+    }
+    if (args.sortReads) {
+      log.info("Sorting reads")
+      adamRecords = adamRecords.adamSortReadsByReferencePosition()
     }
     if (args.singlePartition) {
       log.info("Writing output to a single partition")

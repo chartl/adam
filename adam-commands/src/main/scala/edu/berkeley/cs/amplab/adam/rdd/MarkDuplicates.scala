@@ -39,36 +39,50 @@ private[rdd] class MarkDuplicates extends Serializable with Logging {
   // performance hit since you would need to do a join against the original rdd.
   def markDuplicates(rdd: RDD[ADAMRecord]): RDD[ADAMRecord] = {
 
-    // Group the paired reads
-    val pairGroups = rdd.map(record => (ReadPairPositions(record), record)).groupByKey()
+    // Group the paired reads by read pair position/orientation
+    val readsGroupedByPos = rdd.map(record => (ReadPairPositions(record), record)).groupByKey()
 
-    val unclippedPositions: RDD[ADAMRecord] = pairGroups.flatMap {
+    // Pair up the reads
+    val pairedReads: RDD[(ADAMRecord, Option[ADAMRecord])] = readsGroupedByPos.flatMap {
       p =>
-      // This groupBy will fix any position tuple collisions for read pairs...
-        val groupedReads = p._2.groupBy(p =>
-          (p.getReadName.toString.reverse, p.getRecordGroupId.toString.reverse))
 
-        // Walk the grouped reads and emit the unclipped positions
-        groupedReads.flatMap {
+      // Pull out any single ended reads
+        val (mapped, unmapped) = p._2.partition(_.getReadMapped)
+        // Separate the read mapped from mate mapped reads
+        val (mateMapped, readMapped) = mapped.partition(_.getMateMapped)
+
+        // Not read or mate mapped
+        val unmappedRecords = unmapped.map(p => (p, None))
+        // Only read mapped
+        val readMappedRecords = readMapped.map(p => (p, None))
+
+        // This groupBy will fix any position tuple collisions for read pairs...
+        val groupedReads = mateMapped.groupBy(p =>
+          (p.getReadName.toString.reverse, p.getRecordGroupId.toString.reverse)).toSeq
+
+        val mateMappedRecords = groupedReads.map {
           p =>
             val key: (CharSequence, CharSequence) = p._1
             val reads: Seq[ADAMRecord] = p._2
             reads.size match {
               case 1 =>
                 val read1: ADAMRecord = reads(0)
-                Seq(read1)
+                // TODO: Save metrics. This is a mated read who's missing a mate
+                (read1, None)
               case 2 =>
-                /*
                 val read1 = reads.find(_.getFirstOfPair)
-                val read2 = reads.find(_.getSecondOfPair)*/
-                Seq(reads(0), reads(1))
+                if (read1.isEmpty) throw new IllegalStateException("Unable to first of pair")
+                val read2 = reads.find(_.getSecondOfPair)
+                if (read2.isEmpty) throw new IllegalStateException("Unable to find second of pair")
+                (read1.get, read2)
               case _ =>
                 throw new IllegalStateException("Found unexpected number '%d' of reads for pair groupBy '%s:%s'".format(reads.size, key._1, key._2))
             }
         }
+        mateMappedRecords ++ readMappedRecords ++ unmappedRecords ++ Nil
     }
 
-    unclippedPositions
+    pairedReads.flatMap {p => List(p._1) ++ p._2}
   }
 
 }
