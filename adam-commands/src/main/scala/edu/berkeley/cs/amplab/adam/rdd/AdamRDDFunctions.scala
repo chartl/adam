@@ -70,7 +70,9 @@ class AdamRecordRDDFunctions(rdd: RDD[ADAMRecord]) extends Serializable {
     FlagStat(rdd)
   }
 
-
+  def adamReadPairs(): RDD[ReadPair] = {
+    ReadPair(rdd)
+  }
 }
 
 class AdamPileupRDDFunctions(rdd: RDD[ADAMPileup]) extends Serializable {

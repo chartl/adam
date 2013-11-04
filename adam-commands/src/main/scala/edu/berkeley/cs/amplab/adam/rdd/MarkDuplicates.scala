@@ -17,6 +17,7 @@
 package edu.berkeley.cs.amplab.adam.rdd
 
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
+import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
 import spark.{Logging, RDD}
 
 private[rdd] object MarkDuplicates {
@@ -29,9 +30,44 @@ private[rdd] object MarkDuplicates {
 private[rdd] class MarkDuplicates extends Serializable with Logging {
   initLogging()
 
-  def markDuplicates(rdd: RDD[ADAMRecord]): RDD[ADAMRecord] = {
-    log.warn("Mark Duplicates currently not implemented")
-    rdd
+  // This method makes no assumptions about the order of the incoming records.
+  // However, it will currently return records in a different order. You should
+  // do sorting AFTER marking duplicates. Maintaining ordering would cost a
+  // performance hit since you would need to do a join against the original rdd.
+  def markDuplicates(rdd: RDD[ADAMRecord], deleteDuplicates: Boolean = false): RDD[ADAMRecord] = {
+    for ((key, duplicateGroup) <- rdd.adamReadPairs().groupBy(_.markDuplicatesKey);
+         (readPair, i) <- duplicateGroup.sortBy(_.score)(Ordering[Int].reverse).zipWithIndex;
+         read <- {
+           if (readPair.read1.getPrimaryAlignment) {
+             readPair.setDuplicateFlag(i != 0)
+           } else {
+             readPair.setDuplicateFlag(true)
+           }
+           Some(readPair.read1) ++ readPair.read2
+         }) yield read
+  }
+
+  // Useful for debugging. Use coalesce(1) to ensure that only a single thread is writing
+  def debugInfo(title: String, readPairs: Seq[ReadPair]) = {
+    def printRead(record: ADAMRecord) = {
+      println("!%s:%s start=%s mstart=%s cigar=%s primary?%s 1read=%s 2read=%s mapped?%s pair?%s dup?%s %s"
+        .format(record.getRecordGroupId, record.getReadName, record.getStart,
+        record.getMateAlignmentStart, record.getCigar, record.getPrimaryAlignment, record.getFirstOfPair,
+        record.getSecondOfPair,
+        record.getReadMapped, record.getReadPaired, record.getDuplicateRead, record.getSequence))
+    }
+    println("." * 20 + title + "." * 20)
+    readPairs.foreach {
+      p =>
+        printRead(p.read1)
+        if (p.read2.isDefined) {
+          printRead(p.read2.get)
+        } else {
+          println("No mate")
+        }
+    }
+    println("." * (40 + title.length))
   }
 
 }
+

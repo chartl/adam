@@ -18,7 +18,6 @@ package edu.berkeley.cs.amplab.adam.rich
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
 import net.sf.samtools.{CigarElement, CigarOperator, Cigar, TextCigarCodec}
 import scala.collection.JavaConversions._
-import edu.berkeley.cs.amplab.adam.models.{MatedReferencePosition, ReferencePosition}
 
 object RichAdamRecord {
   val CIGAR_CODEC: TextCigarCodec = TextCigarCodec.getSingleton
@@ -35,27 +34,12 @@ class IlluminaOptics(val tile: Long, val x: Long, val y: Long) {}
 
 class RichAdamRecord(record: ADAMRecord) {
 
-  // NOTE: A first and second read of a pair MUST create the same mated reference position
-  lazy val matedReferencePosition: MatedReferencePosition = {
-    val matePos = record.getMateAlignmentStart
-    val mateRef = record.getMateReferenceId
-    if (record.getMateMapped) {
-      if (record.getFirstOfPair) {
-        new MatedReferencePosition(ReferencePosition(record), Some(ReferencePosition(mateRef, matePos)))
-      } else if (record.getSecondOfPair) {
-        new MatedReferencePosition(ReferencePosition(mateRef, matePos), Some(ReferencePosition(record)))
-      } else {
-        throw new IllegalStateException("Mated read that is not the first OR second read of pair")
-      }
-    } else {
-      new MatedReferencePosition(ReferencePosition(record), None)
-    }
+  lazy val phredQuals = {
+    record.getQual.toString.map(p => p - 33)
   }
 
-  // Calculates the sum of the phred scores that are over a specified cutoff (default = 15)
-  lazy val score = record.getQual.toString.filter(_ >= 15).foldLeft(0) {
-    _ + _
-  }
+  // Calculates the sum of the phred scores that are greater than or equal to 15
+  lazy val score = if (record.getReadMapped) phredQuals.filter(15 <=).sum else 0
 
   // Parses the readname to Illumina optics information
   lazy val illuminaOptics: Option[IlluminaOptics] = {
@@ -77,39 +61,34 @@ class RichAdamRecord(record: ADAMRecord) {
   }
 
   // Returns the end position if the read is mapped, None otherwise
-  lazy val end: Option[Long] = {
-    if (record.getReadMapped) {
-      Some(samtoolsCigar.getCigarElements
-        .filter(p => p.getOperator.consumesReferenceBases())
-        .foldLeft(record.getStart) {
-        (pos, cigarEl) => pos + cigarEl.getLength
-      }.toLong)
-    } else {
-      None
+  lazy val end: Long = {
+    if (!record.getReadMapped) {
+      throw new IllegalStateException("Read %s is unmapped and has no end".format(record.getReadName))
+    }
+    samtoolsCigar.getCigarElements
+      .filter(p => p.getOperator.consumesReferenceBases())
+      .foldLeft(record.getStart) {
+      (pos, cigarEl) => pos + cigarEl.getLength
     }
   }
 
   // Returns the position of the unclipped end if the read is mapped, None otherwise
-  lazy val unclippedEnd: Option[Long] = {
-    if (record.getReadMapped) {
-      Some(samtoolsCigar.getCigarElements.reverse.takeWhile(isClipped)
-        .foldLeft(end.get) {
-        (pos, cigarEl) => pos + cigarEl.getLength
-      }.toLong)
-    } else {
-      None
+  lazy val unclippedEnd: Long = {
+    if (!record.getReadMapped) {
+      throw new IllegalStateException("Read %s is unmapped and has no unclippedEnd".format(record.getReadName))
+    }
+    samtoolsCigar.getCigarElements.reverse.takeWhile(isClipped).foldLeft(end) {
+      (pos, cigarEl) => pos + cigarEl.getLength
     }
   }
 
   // Returns the position of the unclipped start if the read is mapped, None otherwise.
-  lazy val unclippedStart: Option[Long] = {
-    if (record.getReadMapped) {
-      Some(samtoolsCigar.getCigarElements.takeWhile(isClipped)
-        .foldLeft(record.getStart) {
-        (pos, cigarEl) => pos - cigarEl.getLength
-      }.toLong)
-    } else {
-      None
+  lazy val unclippedStart: Long = {
+    if (!record.getReadMapped) {
+      throw new IllegalStateException("Read %s is unmapped and has no unclippedStart".format(record.getReadName))
+    }
+    samtoolsCigar.getCigarElements.takeWhile(isClipped).foldLeft(record.getStart) {
+      (pos, cigarEl) => pos - cigarEl.getLength
     }
   }
 }

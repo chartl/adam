@@ -17,32 +17,40 @@
 package edu.berkeley.cs.amplab.adam.models
 
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
+import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
 import com.esotericsoftware.kryo.{Kryo, Serializer}
 import com.esotericsoftware.kryo.io.{Input, Output}
-import java.lang.{Integer => jInt, Long => jLong}
 
 object ReferencePosition {
 
+  // Reference position for unmapped reads
+  val unmapped = new ReferencePosition(Int.MaxValue, Long.MaxValue)
+
   def apply(record: ADAMRecord): ReferencePosition = {
-    new ReferencePosition(record.getReferenceId, record.getStart)
+    if (record.getReadMapped) {
+      new ReferencePosition(record.getReferenceId, record.getStart)
+    } else {
+      unmapped
+    }
   }
 
-  def apply(refId: jInt, pos: jLong): ReferencePosition = {
-    new ReferencePosition(refId, pos)
+  def unclipped5prime(record: ADAMRecord): ReferencePosition = {
+    if (record.getReadMapped) {
+      val recordPos = if (record.getReadNegativeStrand) record.unclippedEnd else record.unclippedStart
+      new ReferencePosition(record.getReferenceId, recordPos)
+    } else {
+      unmapped
+    }
   }
-
 }
 
-class ReferencePosition(refIdIn: jInt, val posIn: jLong) extends Ordered[ReferencePosition] with Serializable {
-  val refId: Int = if (refIdIn == null.asInstanceOf[jInt]) Int.MaxValue else refIdIn
-  val pos: Long = if (posIn == null.asInstanceOf[jLong]) Long.MaxValue else posIn
+case class ReferencePosition(refId: Int, pos: Long) extends Ordered[ReferencePosition] {
 
   def compare(that: ReferencePosition): Int = {
     val posCompare = pos.compare(that.pos)
     if (posCompare != 0) return posCompare
-    refId.compareTo(that.refId)
+    refId.compare(that.refId)
   }
-
 }
 
 // Used by the KryoSerializer
