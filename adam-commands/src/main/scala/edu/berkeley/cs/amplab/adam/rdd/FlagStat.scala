@@ -19,11 +19,13 @@ import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
 import spark.RDD
 
 object FlagStatMetrics {
-  val emptyFailedQuality = new FlagStatMetrics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, true)
-  val emptyPassedQuality = new FlagStatMetrics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false)
+  val emptyFailedQuality = new FlagStatMetrics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, true)
+  val emptyPassedQuality = new FlagStatMetrics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false)
 }
 
-case class FlagStatMetrics(total: Long, duplicates: Long, mapped: Long, pairedInSequencing: Long,
+case class FlagStatMetrics(total: Long, duplicates: Long, duplicatesBothMapped: Long,
+                           duplicatesOnlyReadMapped: Long, duplicatesCrossChromosome: Long,
+                           mapped: Long, pairedInSequencing: Long,
                            read1: Long, read2: Long, properlyPaired: Long, withSelfAndMateMapped: Long,
                            singleton: Long, withMateMappedToDiffChromosome: Long,
                            withMateMappedToDiffChromosomeMapQ5: Long, failedQuality: Boolean) {
@@ -31,6 +33,9 @@ case class FlagStatMetrics(total: Long, duplicates: Long, mapped: Long, pairedIn
     assert(failedQuality == that.failedQuality, "Can't reduce passedVendorQuality with different failedQuality values")
     new FlagStatMetrics(total + that.total,
       duplicates + that.duplicates,
+      duplicatesBothMapped + that.duplicatesBothMapped,
+      duplicatesOnlyReadMapped + that.duplicatesOnlyReadMapped,
+      duplicatesCrossChromosome + that.duplicatesCrossChromosome,
       mapped + that.mapped,
       pairedInSequencing + that.pairedInSequencing,
       read1 + that.read1,
@@ -53,8 +58,11 @@ object FlagStat {
         def b2i(boolean: Boolean) = if (boolean) 1 else 0
         new FlagStatMetrics(1,
           b2i(p.getDuplicateRead),
+          b2i(p.getDuplicateRead && p.getReadMapped && p.getMateMapped),
+          b2i(p.getDuplicateRead && p.getReadMapped && !p.getMateMapped),
+          b2i(p.getDuplicateRead && (p.getReferenceId != p.getMateReferenceId)),
           b2i(p.getReadMapped),
-          b2i(p.getReadPaired && p.getReadPaired),
+          b2i(p.getReadPaired),
           b2i(p.getReadPaired && p.getFirstOfPair),
           b2i(p.getReadPaired && p.getSecondOfPair),
           b2i(p.getReadPaired && p.getProperPair),
