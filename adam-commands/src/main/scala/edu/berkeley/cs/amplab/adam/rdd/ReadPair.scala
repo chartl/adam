@@ -66,20 +66,49 @@ case class ReadPair(read1: ADAMRecord, read2: Option[ADAMRecord]) {
     this
   }
 
-  lazy val markDuplicatesKey = {
-    val library = read1.getRecordGroupLibrary
-    val read1refPos = ReferencePosition.unclipped5prime(read1)
-    val read2refPos = read2 match {
-      case None => ReferencePosition.unmapped
-      case Some(read) => ReferencePosition.unclipped5prime(read)
+  lazy val markDuplicatesKey: Option[MarkDuplicatesKey] = {
+    def unclipped5prime(record: ADAMRecord): Long = {
+      if (record.getReadNegativeStrand) record.unclippedEnd else record.unclippedStart
     }
-    def orientation(optionalRead: Option[ADAMRecord]): Option[Boolean] = {
-      optionalRead match {
-        case None => None
-        case Some(read) => if (read.getReadMapped) Some(read.getReadNegativeStrand) else None
-      }
+    def unclipped5PrimeWithOrientation(record: ADAMRecord): Long = {
+      if (record.getReadNegativeStrand) 0 - unclipped5prime(record) else unclipped5prime(record)
     }
-    new MarkDuplicatesKey(library, read1refPos, read2refPos, orientation(Some(read1)), orientation(read2))
+    read2 match {
+      case None =>
+        // We only have one read in this pair
+        if (read1.getReadMapped && read1.getPrimaryAlignment && !read1.getReadPaired) {
+          Some(new MarkDuplicatesKey(read1.getRecordGroupLibrary,
+            new ReferencePosition(read1.getReferenceId, unclipped5PrimeWithOrientation(read1))))
+        } else {
+          None
+        }
+      case Some(r2) =>
+        // We have two reads in this pair
+        if (read1.getPrimaryAlignment && read1.getReadMapped && r2.getReadMapped) {
+          // Both reads are mapped
+          val read1pos = unclipped5prime(read1)
+          val read2pos = unclipped5prime(r2)
+          if (read1pos < read2pos) {
+            Some(new MarkDuplicatesKey(read1.getRecordGroupLibrary,
+              new ReferencePosition(read1.getReferenceId, unclipped5PrimeWithOrientation(read1)),
+              Some(new ReferencePosition(r2.getReferenceId, unclipped5PrimeWithOrientation(r2)))))
+          } else {
+            Some(new MarkDuplicatesKey(read1.getRecordGroupLibrary,
+              new ReferencePosition(r2.getReferenceId, unclipped5PrimeWithOrientation(r2)),
+              Some(new ReferencePosition(read1.getReferenceId, unclipped5PrimeWithOrientation(read1)))))
+          }
+        } else {
+          if (read1.getPrimaryAlignment && read1.getReadMapped && !read1.getReadPaired) {
+            Some(new MarkDuplicatesKey(read1.getRecordGroupLibrary,
+              new ReferencePosition(read1.getReferenceId, unclipped5PrimeWithOrientation(read1))))
+          } else if (r2.getPrimaryAlignment && r2.getReadMapped && read1.getReadPaired) {
+            Some(new MarkDuplicatesKey(r2.getRecordGroupLibrary,
+              new ReferencePosition(r2.getReferenceId, unclipped5PrimeWithOrientation(r2))))
+          } else {
+            None
+          }
+        }
+    }
   }
 
   lazy val score: Int = {
@@ -92,8 +121,7 @@ case class ReadPair(read1: ADAMRecord, read2: Option[ADAMRecord]) {
 }
 
 // TODO: use an Int library id instead of a library string
-case class MarkDuplicatesKey(library: CharSequence, read1refPos: ReferencePosition, read2refPos: ReferencePosition,
-                             read1negative: Option[Boolean], read2negative: Option[Boolean])
+case class MarkDuplicatesKey(library: CharSequence, read1refPos: ReferencePosition, read2refPos: Option[ReferencePosition] = None)
 
 
 // This is use for quickly (and roughly) grouping together read pairs.
@@ -116,6 +144,7 @@ object ReadPairPositions {
       new ReadPairPositions(matePos, readPos)
     }
   }
+
 }
 
 case class ReadPairPositions(pos1: Long, pos2: Long)

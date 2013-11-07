@@ -33,15 +33,6 @@ object ReferencePosition {
       unmapped
     }
   }
-
-  def unclipped5prime(record: ADAMRecord): ReferencePosition = {
-    if (record.getReadMapped) {
-      val recordPos = if (record.getReadNegativeStrand) record.unclippedEnd else record.unclippedStart
-      new ReferencePosition(record.getReferenceId, recordPos)
-    } else {
-      unmapped
-    }
-  }
 }
 
 case class ReferencePosition(refId: Int, pos: Long) extends Ordered[ReferencePosition] {

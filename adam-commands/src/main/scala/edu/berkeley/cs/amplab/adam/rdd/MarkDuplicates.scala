@@ -38,10 +38,16 @@ private[rdd] class MarkDuplicates extends Serializable with Logging {
     for ((key, duplicateGroup) <- rdd.adamReadPairs().groupBy(_.markDuplicatesKey);
          (readPair, i) <- duplicateGroup.sortBy(_.score)(Ordering[Int].reverse).zipWithIndex;
          read <- {
-           if (readPair.read1.getPrimaryAlignment) {
-             readPair.setDuplicateFlag(i != 0)
-           } else {
-             readPair.setDuplicateFlag(true)
+           key match {
+             case None =>
+               readPair.setDuplicateFlag(value = false)
+             case Some(duplicatesKey) =>
+               duplicatesKey.read2refPos match {
+                 case None =>
+                   readPair.setDuplicateFlag(true)
+                 case Some(read2refPos) =>
+                   readPair.setDuplicateFlag(i != 0)
+               }
            }
            Some(readPair.read1) ++ readPair.read2
          }) yield read
