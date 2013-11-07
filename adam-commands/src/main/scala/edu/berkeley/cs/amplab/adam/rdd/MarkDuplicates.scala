@@ -41,13 +41,12 @@ private[rdd] class MarkDuplicates extends Serializable with Logging {
            key match {
              case None =>
                readPair.setDuplicateFlag(value = false)
-             case Some(duplicatesKey) =>
-               duplicatesKey.read2refPos match {
-                 case None =>
-                   readPair.setDuplicateFlag(true)
-                 case Some(read2refPos) =>
-                   readPair.setDuplicateFlag(i != 0)
-               }
+             case Some(MarkDuplicatesKey(_, _, None)) =>
+               // Fragments
+               readPair.setDuplicateFlag(true)
+             case Some(MarkDuplicatesKey(_, _, Some(_))) =>
+               // Pairs
+               readPair.setDuplicateFlag(i != 0)
            }
            Some(readPair.read1) ++ readPair.read2
          }) yield read
