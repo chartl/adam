@@ -39,25 +39,12 @@ class Helper extends Serializable {
   def canonicalName(read: ADAMRecord): String = {
     read.getRecordGroupId + ":" + read.getReadName + "/" + (if (read.getFirstOfPair) 0 else 1)
   }
-
-  def recordDiff(r1: ADAMRecord, r2: ADAMRecord): Boolean = {
-    if (r1.equals(r2)) return true
-    for (i <- 0 until ADAMRecord.SCHEMA$.getFields.size) {
-      val f1 = r1.get(i)
-      val f2 = r2.get(i)
-      if (f1 != f2) {
-        println("Mismatch field=%d %s != %s".format(i, f1, f2))
-      }
-    }
-    false
-  }
 }
 
 class CheckFoo extends AdamSparkCommand[SparkArgs] {
   protected val args = new SparkArgs {
     spark_master = "local[4]"
   }
-
 
   def run(sc: SparkContext, job: Job): Unit = {
     val adamFile: RDD[ADAMRecord] = sc.adamLoad("/workspace/bams/test/ADAM.adam")
@@ -76,8 +63,21 @@ class CheckFoo extends AdamSparkCommand[SparkArgs] {
         assert(p._2._2.size == 1)
         val adamRead = p._2._1(0)
         val picardRead = p._2._2(0)
-        helper.recordDiff(adamRead, picardRead)
+
+        val diff = adamRead.getDuplicateRead != picardRead.getDuplicateRead
+        if (diff) {
+          println(adamRead)
+        }
+        diff
     }
+    val adamReads = mismatched.map(p => p._2._1(0))
+    val picardReads = mismatched.map(p => p._2._2(0))
+
+    val (_, adamStats) = adamReads.adamFlagStat()
+    val (_, picardStats) = picardReads.adamFlagStat()
+    println(adamStats)
+    println(picardStats)
+
     println("There are %d mismatched reads %d total".format(mismatched.count(), keyedPicardFile.count()))
   }
 

@@ -39,7 +39,7 @@ class RichAdamRecord(record: ADAMRecord) {
   }
 
   // Calculates the sum of the phred scores that are greater than or equal to 15
-  lazy val score = if (record.getReadMapped) phredQuals.filter(15 <=).sum else 0
+  lazy val score = phredQuals.filter(15 <=).sum
 
   // Parses the readname to Illumina optics information
   lazy val illuminaOptics: Option[IlluminaOptics] = {
@@ -91,4 +91,17 @@ class RichAdamRecord(record: ADAMRecord) {
       (pos, cigarEl) => pos - cigarEl.getLength
     }
   }
+
+  // Return the unclipped 5 prime position.
+  def unclipped5prime(withOrientation: Boolean = false): Long = {
+    val fivePrime = if (record.getReadNegativeStrand) unclippedEnd else unclippedStart
+    if (withOrientation && record.getReadNegativeStrand) {
+      0 - fivePrime
+    } else {
+      fivePrime
+    }
+  }
+
+  // Return the 5 prime position. Will be negative if the read is matched to the negative strand
+  def unclipped5primeWithOrientation() = unclipped5prime(withOrientation = true)
 }
