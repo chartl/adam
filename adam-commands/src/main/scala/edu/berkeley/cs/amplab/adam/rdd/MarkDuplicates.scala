@@ -66,6 +66,7 @@ private[rdd] class MarkDuplicates extends Serializable with Logging {
 
     for ((key, readPairs) <- rdd.adamReadPairs().groupBy(duplicatesGroup);
          readPair <- {
+
            if (readPairs.size <= 1) {
              // No duplicate possible since we have a group of one or less
              for (readPair <- readPairs) yield {
@@ -73,10 +74,12 @@ private[rdd] class MarkDuplicates extends Serializable with Logging {
                readPair.setDuplicateFlag(value = false)
                readPair
              }
+
            } else {
              // Duplicates have been found (more than a single read pair)
-             val (pairs, fragments) = readPairs.partition(_.isMappedPrimaryPair)
-             val hasPairs = pairs.size > 0
+             val (mappedUnmappedPairs, fragments) = readPairs.partition(_.read2.isDefined)
+             val (pairs, unmappedPairs) = mappedUnmappedPairs.partition(_.isMappedPrimaryPair)
+             val hasPairs = pairs.size > 0 || unmappedPairs.size > 0
              val hasFrags = fragments.size > 0
 
              if (hasPairs) {
@@ -84,9 +87,15 @@ private[rdd] class MarkDuplicates extends Serializable with Logging {
                val processedFrags =
                  for (frag <- fragments) yield {
                    // All fragments mixed with pairs are marked as duplicates
-                   frag.setDuplicateFlag(!frag.read2.isDefined)
+                   frag.setDuplicateFlag(value = true)
                    frag
                  }
+
+               val processedUnmappedPairs =
+                for ((unmappedPair, i) <- unmappedPairs.zipWithIndex) yield {
+                  unmappedPair.setDuplicateFlag(i != 0)
+                  unmappedPair
+                }
 
                def getSecondFivePrimePosition(pair: ReadPair): ReferencePosition = {
                  val read1pos = pair.read1.unclipped5prime()
@@ -106,7 +115,7 @@ private[rdd] class MarkDuplicates extends Serializable with Logging {
                  }
 
                // Return all process fragments and pairs
-               processedFrags ++ processedPairs
+               processedFrags ++ processedPairs ++ processedUnmappedPairs
 
              } else if (hasFrags) {
                // Only have frags with no pairs... keep the highest scoring frag and mark the rest as dups
