@@ -21,6 +21,7 @@ import edu.berkeley.cs.amplab.adam.util.{Args4jBase, Args4j}
 import org.kohsuke.args4j.{Argument, Option => Args4jOption}
 import edu.berkeley.cs.amplab.adam.rdd.AdamContext._
 import edu.berkeley.cs.amplab.adam.avro.ADAMRecord
+import java.io.File
 
 object Transform extends AdamCommandCompanion {
   val commandName = "transform"
@@ -40,6 +41,11 @@ class TransformArgs extends Args4jBase with ParquetArgs with SparkArgs {
   val sortReads: Boolean = false
   @Args4jOption(required = false, name = "-mark_duplicate_reads", usage = "Mark duplicate reads")
   val markDuplicates: Boolean = false
+  @Args4jOption(required=false,name="-recalibrate_base_qualities",usage = "Recalibrate the base quality scores (ILLUMINA only)")
+  val recalibrateBaseQualities : Boolean = false
+  @Args4jOption(required = false, name="-dbsnp_sites", usage = "dbsnp sites file")
+  val dbsnpSitesFile : File = null
+
 }
 
 class Transform(protected val args: TransformArgs) extends AdamSparkCommand[TransformArgs] with Logging {
@@ -53,6 +59,11 @@ class Transform(protected val args: TransformArgs) extends AdamSparkCommand[Tran
       log.info("Marking duplicates")
       adamRecords = adamRecords.adamMarkDuplicates()
     }
+
+    if ( args.recalibrateBaseQualities ) {
+      adamRecords = adamRecords.adamBQSR(args.dbsnpSitesFile)
+    }
+
     // NOTE: For now, sorting needs to be the last transform
     if (args.sortReads) {
       log.info("Sorting reads")
