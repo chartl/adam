@@ -47,8 +47,8 @@ case class BaseContext(records: RDD[ADAMRecord], size: Int) extends StandardCova
 
   val BASES = Array('A'.toByte,'C'.toByte,'G'.toByte,'T'.toByte)
   val COMPL = Array('T'.toByte,'G'.toByte,'C'.toByte,'A'.toByte)
-  val COMPL_MP = BASES zip COMPL toMap
   val N_BASE = 'N'.toByte
+  val COMPL_MP = ( BASES zip COMPL toMap ) + ( N_BASE -> N_BASE )
 
   override def apply(rich: RichADAMRecord, startOffset: Int, endOffset: Int) : Array[Int] = {
     val rec = rich.record
