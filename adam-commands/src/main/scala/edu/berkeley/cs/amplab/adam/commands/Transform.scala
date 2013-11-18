@@ -45,6 +45,8 @@ class TransformArgs extends Args4jBase with ParquetArgs with SparkArgs {
   val recalibrateBaseQualities : Boolean = false
   @Args4jOption(required = false, name="-dbsnp_sites", usage = "dbsnp sites file")
   val dbsnpSitesFile : File = null
+  @Args4jOption(required= false, name="-sample_fraction", usage ="Limit to the number of records (debug purposes)")
+  val sampleFraction : Double = -1.0
 
 }
 
@@ -55,6 +57,9 @@ class Transform(protected val args: TransformArgs) extends AdamSparkCommand[Tran
 
   def run(sc: SparkContext, job: Job) {
     var adamRecords: RDD[ADAMRecord] = sc.adamLoad(args.inputPath)
+    if ( args.sampleFraction > 0.0 && args.sampleFraction < 1.0)
+      adamRecords = adamRecords.sample(withReplacement = false,args.sampleFraction,args.sampleFraction.hashCode() ^ args.inputPath.hashCode)
+
     if (args.markDuplicates) {
       log.info("Marking duplicates")
       adamRecords = adamRecords.adamMarkDuplicates()
