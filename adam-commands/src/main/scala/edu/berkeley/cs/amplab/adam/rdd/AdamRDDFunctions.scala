@@ -70,6 +70,8 @@ class AdamRecordRDDFunctions(rdd: RDD[ADAMRecord]) extends Serializable with Log
   }
 
   def adamBQSR(dbSNP : File) : RDD[ADAMRecord] = {
+    log.info("Reading the dbSNP file")
+    println("Reading the dbSNP file")
     val dbsnpMap = scala.io.Source.fromFile(dbSNP).getLines().map( posLine => {
       val split = posLine.split("\t")
       val contig = split(0)
@@ -79,6 +81,8 @@ class AdamRecordRDDFunctions(rdd: RDD[ADAMRecord]) extends Serializable with Log
       dbMap + (pair._1 -> (dbMap.getOrElse(pair._1,Set[Int]()) + pair._2) )
     })
 
+    log.info("Broadcasting the dbsnp file")
+    println("Broadcasting the dbsnp file")
     val broadcastDbSNP = rdd.context.broadcast(dbsnpMap)
 
     RecalibrateBaseQualities(rdd,broadcastDbSNP)

@@ -105,15 +105,19 @@ class RecalTable(_counts: mutable.HashMap[Int, Array[ErrorCounts]], _expectedMM:
       kv => kv._1 -> kv._2(0).errorsByVariate.values.reduce(_ ++ _)
     } toMap
     val readgroups = qualByRGCounts.keySet.toList.sorted.groupBy(t => (t - 1) / RecalUtil.Constants.MAX_REASONABLE_QSCORE)
+    if ( ! readgroups.contains(0) ) {
+      throw new IllegalStateException("BUG: no read groups observed or read groups do not begin index with 0")
+    }
     readGroupCounts = readgroups.mapValues(idxs => idxs.map(t => qualByRGCounts(t)).reduce(_ ++ _)).map(identity) // workaround, MapLike not serializable
-    globalCounts = readGroupCounts.values.reduce(_ ++ _)
+    globalCounts = if ( readGroupCounts.values.isEmpty ) new ErrorCount else readGroupCounts.values.reduce(_ ++ _)
     averageReportedError = expectedMismatch / globalCounts.basesObserved
     globalError = globalCounts.getErrorProb.getOrElse(averageReportedError)
   }
 
   def getReadGroupDelta(baseCovar: BaseCovariates): Double = {
-    val empiricalCounts = readGroupCounts((baseCovar.qualByRG - 1) / RecalUtil.Constants.MAX_REASONABLE_QSCORE)
-     empiricalCounts.getErrorProb.getOrElse(averageReportedError) - averageReportedError
+    val k = (baseCovar.qualByRG - 1) / RecalUtil.Constants.MAX_REASONABLE_QSCORE
+    val empiricalCounts = readGroupCounts.getOrElse(k,new ErrorCount)
+    empiricalCounts.getErrorProb.getOrElse(averageReportedError) - averageReportedError
   }
 
   def getQualScoreDelta(baseCovar: BaseCovariates): Double = {

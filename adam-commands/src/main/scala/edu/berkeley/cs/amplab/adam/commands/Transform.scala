@@ -66,6 +66,8 @@ class Transform(protected val args: TransformArgs) extends AdamSparkCommand[Tran
     }
 
     if ( args.recalibrateBaseQualities ) {
+      log.info("Recalibrating base qualities")
+      println("Recalibrating base qualities")
       adamRecords = adamRecords.adamBQSR(args.dbsnpSitesFile)
     }
 

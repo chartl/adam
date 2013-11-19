@@ -9,17 +9,19 @@ import edu.berkeley.cs.amplab.adam.rich.RichADAMRecord
  */
 
 // this class is required, not just standard. Baked in to recalibration.
-class QualByRG(rdd: RDD[ADAMRecord]) extends Serializable {
-  // need to get the unique read groups todo --- this is surprisingly slow
-  //val readGroups = rdd.map(_.getRecordGroupId.toString).distinct().collect().sorted.zipWithIndex.toMap
-  var readGroups = Map[String,Int]()
+class QualByRG(groups: Seq[String]) extends Serializable {
+  val readGroups = groups.zipWithIndex.toMap
 
   def apply(rich: RichADAMRecord, start: Int, end: Int) : Array[Int] = {
-    if (! readGroups.contains(rich.record.getRecordGroupId.asInstanceOf[String]) ) {
-      readGroups += (rich.record.getRecordGroupId.asInstanceOf[String] -> readGroups.size)
-    }
     val rg_offset = RecalUtil.Constants.MAX_REASONABLE_QSCORE*readGroups(rich.record.getRecordGroupId.toString)
     rich.qualityScores.slice(start,end).map(_.toInt + rg_offset)
+  }
+
+  def getRGIndex(read: ADAMRecord) : Option[Int] = {
+    if ( readGroups.contains(read.getRecordGroupId.asInstanceOf[String]) ) {
+      Some(readGroups(read.getRecordGroupId.asInstanceOf[String]))
+    } else
+      None
   }
 
   def numPartitions = RecalUtil.Constants.MAX_REASONABLE_QSCORE*(1+readGroups.size)
@@ -29,7 +31,7 @@ trait StandardCovariate extends Serializable {
   def apply(rec: RichADAMRecord, start: Int, end: Int) : Array[Int] // get the covariate for all the bases of the read
 }
 
-case class DiscreteCycle(args: RDD[ADAMRecord]) extends StandardCovariate {
+case class DiscreteCycle(noOp: Boolean = false) extends StandardCovariate {
   // this is a special-case of the GATK's Cycle covariate for discrete technologies.
   // Not to be used for 454 or ion torrent (which are flow cycles)
   override def apply(rich: RichADAMRecord, startOffset: Int, endOffset: Int) : Array[Int] = {
@@ -41,9 +43,7 @@ case class DiscreteCycle(args: RDD[ADAMRecord]) extends StandardCovariate {
   }
 }
 
-case class BaseContext(records: RDD[ADAMRecord], size: Int) extends StandardCovariate {
-  def this(_s: Int) = this(null,_s)
-  def this(_r: RDD[ADAMRecord]) = this(_r,2)
+case class BaseContext(size: Int = 2) extends StandardCovariate {
 
   val BASES = Array('A'.toByte,'C'.toByte,'G'.toByte,'T'.toByte)
   val COMPL = Array('T'.toByte,'G'.toByte,'C'.toByte,'A'.toByte)
